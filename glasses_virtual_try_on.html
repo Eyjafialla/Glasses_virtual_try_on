@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Web AR Try-On</title>
+  <style>
+    :root {
+      --bg:#0f1115; --fg:#e6e6e6; --muted:#9aa4b2; --accent:#66d9ef; --active:#2d7dff;
+      --chip:#1a1f29; --chip-active:#263043; --border:#2a3140;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; background:var(--bg); color:var(--fg);
+      font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,"Noto Sans","Helvetica Neue",Arial;
+    }
+    header{
+      position:sticky; top:0; z-index:5; display:flex; align-items:center; gap:10px;
+      padding:10px 12px; background:#0f1115d9; backdrop-filter:blur(6px);
+      border-bottom:1px solid var(--border); flex-wrap:wrap;
+    }
+    .brand{font-weight:700; letter-spacing:0.2px}
+    .seg{display:flex; gap:6px; align-items:center; flex-wrap:wrap}
+    .spacer{flex:1}
+    button{
+      appearance:none; border:1px solid var(--border); background:var(--chip); color:var(--fg);
+      padding:7px 10px; border-radius:10px; cursor:pointer; transition:.15s;
+    }
+    button:hover{border-color:#3a455a}
+    button.active{background:var(--chip-active); border-color:#3a455a}
+    .thumbs{display:flex; align-items:center; gap:8px; margin-left:6px}
+    .thumb{
+      width:44px; height:44px; object-fit:contain; background:#0b0e13; border:1px solid var(--border);
+      border-radius:10px; padding:4px; cursor:pointer; transition:.15s;
+    }
+    .thumb.active{outline:2px solid var(--active)}
+    .badge{
+      display:inline-block; background:#151a23; color:var(--muted);
+      padding:6px 8px; border-radius:10px; border:1px solid var(--border); margin-left:6px;
+    }
+    .currThumb{width:44px; height:44px; object-fit:contain; background:#0b0e13; border:1px solid var(--border); border-radius:10px; padding:4px}
+    main{display:grid; grid-template-columns:1fr 380px; gap:12px; padding:12px}
+    .stage{
+      background:#0b0e13; border:1px solid var(--border); border-radius:14px; padding:8px;
+      min-height:60vh; display:flex; align-items:center; justify-content:center;
+    }
+    .stage img{max-width:100%; max-height:78vh; border-radius:8px; display:block}
+    .panel{border:1px solid var(--border); border-radius:14px; padding:16px; background:#0b0e13}
+    .row{display:flex; gap:8px; align-items:center; margin-bottom:10px; flex-wrap:wrap}
+    .hint{color:#9aa4b2; font-size:13px; line-height:1.6}
+    @media (max-width:1100px){ main{grid-template-columns:1fr} .panel{order:-1} }
+  </style>
+</head>
+<body>
+<header>
+  <div class="brand">Web AR Try-On</div>
+
+  <!-- frame A/B/C/D switch -->
+  <div class="seg" role="group" aria-label="Frames">
+    <button id="btnFrameA" class="active">Frame A</button>
+    <button id="btnFrameB">Frame B</button>
+    <button id="btnFrameC">Frame C</button>
+    <button id="btnFrameD">Frame D</button>
+  </div>
+
+  <!-- Thumbnail -->
+  <div id="thumbBar" class="thumbs">
+    <img id="thumbA" class="thumb active" data-fid="A" src="Frame_A.png" alt="A">
+    <img id="thumbB" class="thumb" data-fid="B" src="Frame_B.png" alt="B">
+    <img id="thumbC" class="thumb" data-fid="C" src="Frame_C.png" alt="C">
+    <img id="thumbD" class="thumb" data-fid="D" src="Frame_D.png" alt="D">
+  </div>
+
+  <!-- size and first-time fit -->
+  <div class="seg" role="group" aria-label="Size">
+    <button id="btnSizeS">S</button>
+    <button id="btnSizeM" class="active">M</button>
+    <button id="btnSizeL">L</button>
+    <button id="btnFitOnce">Auto-fit once</button>
+  </div>
+
+  <div class="spacer"></div>
+
+  <img id="currThumb" class="currThumb" src="Frame_A.png" alt="Current">
+  <span id="frameBadge" class="badge">Frame: A</span>
+  <span id="sizeBadge"  class="badge">Size: M (once)</span>
+  <span id="resBadge"   class="badge">— × —</span>
+
+  <button id="start">Start</button>
+  <button id="stop" disabled>Stop</button>
+  <button id="snap">📸 Snapshot</button>
+</header>
+
+<main>
+  <div class="stage">
+    <img id="mjpeg" alt="Video stream (MJPEG)"/>
+  </div>
+
+  <div class="panel">
+    <div class="row">
+      <span class="hint">
+        <strong>Glasses Virtual Try-On Process:</strong><br><br>
+        <strong>1.</strong> Click <strong>Start</strong> to begin the virtual eyewear try-on.<br><br>
+        <strong>2.</strong> <strong>Select Frame Style:</strong> A/B/C/D (Default is Frame A, displayed with corresponding thumbnails. Clicking thumbnails also switches Frame styles).<br><br>
+        <strong>3.</strong> <strong>Select Frame Size:</strong> S/M/L (First-time detection automatically matches the appropriate size).<br><br>
+        <strong>4.</strong> After adjusting the style and size, click <strong>Snapshot</strong> to save the image.<br><br>
+        <strong>5.</strong> Click <strong>Stop</strong> to exit.
+      </span>
+    </div>
+  </div>
+</main>
+
+<script>
+(() => {
+  const $ = (id)=>document.getElementById(id);
+
+  const img = $('mjpeg');
+  const btnA = $('btnFrameA'), btnB = $('btnFrameB'), btnC = $('btnFrameC'), btnD = $('btnFrameD');
+  const thumbA = $('thumbA'),  thumbB = $('thumbB'),  thumbC = $('thumbC'),  thumbD = $('thumbD');
+  const btnSizeS = $('btnSizeS'), btnSizeM = $('btnSizeM'), btnSizeL = $('btnSizeL'), btnFitOnce = $('btnFitOnce');
+  const startBtn = $('start'), stopBtn = $('stop'), snapBtn = $('snap');
+  const frameBadge = $('frameBadge'), sizeBadge = $('sizeBadge'), resBadge = $('resBadge'), currThumb=$('currThumb');
+
+  let curFrame = 'A';
+  let curSize  = 'M';
+  let fitMode  = 'once';
+
+  const API = (p)=>p; 
+
+  function setRunning(running){
+    startBtn.disabled = running;
+    stopBtn.disabled  = !running;
+    snapBtn.disabled  = !running;
+  }
+
+  function highlightFrame(fid){
+    [btnA,btnB,btnC,btnD].forEach(b=>b.classList.remove('active'));
+    ({A:btnA,B:btnB,C:btnC,D:btnD}[fid]).classList.add('active');
+
+    [thumbA,thumbB,thumbC,thumbD].forEach(t=>t.classList.remove('active'));
+    ({A:thumbA,B:thumbB,C:thumbC,D:thumbD}[fid]).classList.add('active');
+
+    frameBadge.textContent = 'Frame: ' + fid;
+    currThumb.src = `Frame_${fid}.png`;
+  }
+
+  async function setFrame(fid){
+    curFrame = fid;
+    highlightFrame(fid);
+    try{
+      await fetch(API('/api/switch_frame'), {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ id: fid })
+      });
+    }catch(err){ console.warn('switch_frame failed', err); }
+  }
+
+  function highlightSize(sz){
+    [btnSizeS,btnSizeM,btnSizeL].forEach(b=>b.classList.remove('active'));
+    ({S:btnSizeS, M:btnSizeM, L:btnSizeL}[sz] || btnSizeM).classList.add('active');
+  }
+
+  async function setSize(sz){
+    curSize = sz; highlightSize(sz);
+    try{
+      const r = await fetch(API('/api/size'), {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ size: sz })
+      });
+      if(r.ok){
+        const j = await r.json().catch(()=>null);
+        if(j && j.state){
+          curSize = j.state.size || curSize;
+          fitMode = j.state.fitMode || fitMode;
+        }
+      }
+    }catch(err){ console.warn('size failed', err); }
+    sizeBadge.textContent = `Size: ${curSize} (${fitMode})`;
+  }
+
+  async function fitOnce(){
+    try{ await fetch(API('/api/fit_once'), {method:'POST'}); fitMode='once'; }
+    catch(err){ console.warn('fit_once failed', err); }
+    sizeBadge.textContent = `Size: ${curSize} (${fitMode})`;
+  }
+
+  // binding events
+  btnA.onclick = ()=>setFrame('A');
+  btnB.onclick = ()=>setFrame('B');
+  btnC.onclick = ()=>setFrame('C');
+  btnD.onclick = ()=>setFrame('D');
+
+  $('thumbBar').addEventListener('click', (e)=>{
+    const t = e.target.closest('.thumb'); if(!t) return;
+    setFrame(t.dataset.fid);
+  });
+
+  btnSizeS.onclick = ()=>setSize('S');
+  btnSizeM.onclick = ()=>setSize('M');
+  btnSizeL.onclick = ()=>setSize('L');
+  btnFitOnce.onclick = ()=>fitOnce();
+
+  // resolution display
+  let raf=0;
+  function loop(){
+    const h = img.naturalHeight|0, w = img.naturalWidth|0;
+    if(h&&w) resBadge.textContent = `${w} × ${h}`;
+    raf = requestAnimationFrame(loop);
+  }
+
+  // start and stop flow
+  startBtn.onclick = () => {
+    setRunning(true);
+    if(raf) cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(loop);
+    img.onerror = () => setTimeout(()=>{ img.src = '/stream.mjpg?ts=' + Date.now(); }, 600);
+    img.src = '/stream.mjpg?ts=' + Date.now();
+    sizeBadge.textContent = `Size: ${curSize} (${fitMode})`;
+  };
+  stopBtn.onclick = () => {
+    if(raf) cancelAnimationFrame(raf);
+    img.removeAttribute('src');
+    setRunning(false);
+  };
+
+  // snapshot
+  snapBtn.onclick = () => {
+    const a = document.createElement('a');
+    a.download = `snapshot_${Date.now()}.jpg`;
+    a.href = '/snapshot';
+    a.click();
+  };
+
+  // initial highlight
+  highlightFrame(curFrame);
+  highlightSize(curSize);
+})();
+</script>
+</body>
+</html>
