@@ -184,9 +184,9 @@ right_bottom = landmarks[374]
 
 ## 9.Demo Video
 Demo video is located at
-```bash
-/Demo/Web_AR_Try-On_demo.mp4
-```
+https://drive.google.com/drive/u/2/my-drive
+Demo/Web_AR_Try-On_demo.mp4
+
 ---
 
 ## 10.Future Work
