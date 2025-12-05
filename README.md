@@ -53,10 +53,7 @@ git clone https://github.com/Eyjafialla/Glasses_virtual_try_on.git
 cd Glasses_virtual_try_on
 ```
 
-### 4.2 Download from Google Drive
-Access the project files here: https://drive.google.com/drive/u/2/folders/1wHeIf39xaiLLjecIibOZ3OPiSBcHmty0
-
-### 4.3 Install Dependencies
+### 4.2 Install Dependencies
 ```bash
 pip install -r requirements.txt
 ```
